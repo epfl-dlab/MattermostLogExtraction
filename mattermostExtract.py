@@ -1,52 +1,58 @@
 import psycopg2
 import sys
+from collections import OrderedDict
 from config import config
 from csv_parser import write_csv
 from datetime import datetime
 
-def query_message_from_to(cur, channelid_to_username):
-    """Generator function that query who sent which message to whom at which date
+
+def query_message_from_to(cur):
+    """Generator function that queries who sent which message to whom at which date. Only people who were on the channel at the
+    time the message was sent are taken in account, using the channelmemberhistory table from the database. Only other people are
+    considered as receivers, not the one sending the message.
 
     Parameters
     ----------
     cur : The cursor to write query to the database
-    channelid_to_username : A dictionnary that maps channelid to username
 
     Returns
     -------
-    List((string, string, string, list<string>, datetime))
+    Generator((string, string, string, list<string>, datetime))
         A list of tuples containing a string for the sender, a string for the message, the channel
-        on which the message was sent, a list of string for the receivers and a datetime at which
+        on which the message was sent, a list of string for the receivers (in the order in which they joined the channel) and a datetime at which
         the message was sent
     """
 
     query = """
-        SELECT U.username, P.message, C.name, C.id AS channelid, P.createat FROM posts P
+        SELECT U.username, P.message,  C.name, (SELECT username from users where users.id = CMH.userid) as receiver, P.createat FROM posts P
         INNER JOIN users U ON P.userid = U.id
+        INNER JOIN channelmemberhistory CMH ON P.channelid = CMH.channelid
         INNER JOIN channels C ON P.channelid = C.id
-        WHERE P.message!=''
-        ORDER BY createat DESC
+        WHERE P.message!='' AND P.createat > CMH.jointime AND (CMH.leavetime IS NULL OR CMH.leavetime>P.createat)
+        ORDER BY P.createat DESC, U.username ASC, P.message ASC
         """
+
     cur.execute(query)
     rows = cur.fetchall()
 
-    f = lambda (sender, message, channel_name, channelid, unix_time) : (sender, message, channel_name, channelid_to_username[channelid], datetime.fromtimestamp(unix_time/1000))
-
-    result = map(f, rows)
-
     row_definition = ("Sender", "Message", "Channel", "Receivers", "Time")
-    result.insert(0, row_definition)
+    yield row_definition
 
-    return result
-
-#    yield row_definition
-#    for sender, message, channel_name, channelid, unix_time in rows:
-#        date = datetime.fromtimestamp(unix_time/1000)
-#        yield sender, message, channel_name, channelid_to_username[channelid], date
-
+    message_to_list_receivers = OrderedDict()
+    for sender, message, channel, receiver, unix_time in rows:
+        receivers = message_to_list_receivers.setdefault((sender, message, channel, unix_time), [])
+        if(sender!=receiver):
+            receivers.append(receiver)
     
-def create_dictionnary_channelid_to_username(cur):
-    """Create a dictionnary that maps channelid to username
+    for (sender, message, channel, unix_time), receivers in message_to_list_receivers.iteritems():
+        yield sender, message, channel, receivers, datetime.fromtimestamp(unix_time/1000)
+
+
+def query_message_from_toNumber(cur):
+    """Function that queries who sent which message to how many persons at which date. Only people who were on the channel at the
+    time the message was sent are taken in account, using the channelmemberhistory table from the database. Only other people are
+    counted as receivers, not the one sending the message. This method runs faster than query_message_from_to which generates a list
+    of the receivers instead of the numbers.
 
     Parameters
     ----------
@@ -54,22 +60,34 @@ def create_dictionnary_channelid_to_username(cur):
 
     Returns
     -------
-    dictionnary(str, list[str])
-        A dictionnary where the key is the channelid and the value a list of all username
-        that are on the channel
+    List((string, string, string, int, datetime))
+        A list of tuples containing a string for the sender, a string for the message, the channel
+        on which the message was sent, the number of receivers and a datetime at which
+        the message was sent
     """
 
     query = """
-        SELECT CM.channelid, U.username FROM channelmembers CM
-        INNER JOIN users U ON CM.userid = U.id
+        SELECT U.username, P.message,  C.name, COUNT(CMH.userid)-1 as number_receivers, P.createat FROM posts P
+        INNER JOIN users U ON P.userid = U.id
+        INNER JOIN channelmemberhistory CMH ON P.channelid = CMH.channelid
+        INNER JOIN channels C ON P.channelid = C.id
+        WHERE P.message!='' AND P.createat > CMH.jointime AND (CMH.leavetime IS NULL OR CMH.leavetime>P.createat)
+        GROUP BY U.username, P.message, C.name, P.createat
+        ORDER BY P.createat DESC, U.username ASC, P.message ASC
         """
-
+    
     cur.execute(query)
     rows = cur.fetchall()
-    channelid_to_username = {}
-    for channelid, username in rows:
-        channelid_to_username.setdefault(channelid, []).append(username) 
-    return channelid_to_username
+    
+    f = lambda (sender, message, channel_name, number_receivers, unix_time) : (sender, message, channel_name, number_receivers, datetime.fromtimestamp(unix_time/1000))
+
+    result = map(f, rows)
+
+    row_definition = ("Sender", "Message", "Channel", "Number_Receivers", "Time")
+    result.insert(0, row_definition)
+
+    return result
+
 
 def main():
     
@@ -83,8 +101,9 @@ def main():
         cur = conn.cursor()
         print("Succesfully connected to the database. Will start writing queries.")
 
-        channelid_to_username = create_dictionnary_channelid_to_username(cur)
-        query_result = query_message_from_to(cur, channelid_to_username)
+        #query_result = query_message_from_toNumber(cur)
+        query_result = query_message_from_to(cur)
+
         write_csv(data=query_result, filename='from_message_to_at.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
