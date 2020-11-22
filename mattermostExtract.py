@@ -5,12 +5,13 @@ from config import config
 from csv_parser import write_csv
 from datetime import datetime
 import hashlib
+import message_processing as mp
 
 
 def query_message_from_to(cur):
     """Generator function that queries who sent which message to whom at which date on which channel with additional informations
-    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree
-    and the extension of the file if it was sent with a file joined.
+    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree,
+    the extension of the file if it was sent with a file joined and the number of words/emojis/char in the message.
     The sender and receivers are anonymised using MD5 hashing.
     Only people who were on the channel at the time the message was sent are taken in account as receivers, using the channelmemberhistory table
     from the database. 
@@ -22,10 +23,13 @@ def query_message_from_to(cur):
 
     Returns
     -------
-    Generator((string, string, string, char, list<string>, datetime, string, string, string))
-        A list of tuples containing 
+    Generator((string, string, int, int, int string, char, list<string>, datetime, string, string, string))
+        A generator of tuples containing 
         - A string for the md5 hash of the mail of the sender
         - A string for the message
+        - An int for the number of words in the message (emojis are not counted as words)
+        - An int fot the number of emojis in the message
+        - An int for the number of chars in the message
         - A string for the name of the channel on which the message was sent
         - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
         - A list of string for the md5 hash of the mail of the receivers (in the order in which they joined the channel)
@@ -51,7 +55,7 @@ def query_message_from_to(cur):
     cur.execute(query)
     rows = cur.fetchall()
 
-    row_definition = ("Sender", "Message", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    row_definition = ("Sender", "Message", "NumberWords", "NumberSmileys", "NumberChars", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield row_definition
 
     #Here we just do a "groupby" to have a list of receivers for the same message and we hash it with md5. We store it in a dictionnary for simplicity.
@@ -65,13 +69,15 @@ def query_message_from_to(cur):
     for (sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.iteritems():
         md5_sender = repr(hashlib.md5(sender.encode()).digest())
         date = datetime.fromtimestamp(unix_time/1000)
-        yield md5_sender, message, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        no_words, no_smiley = mp.count_number_words_and_smiley(message)
+        no_char = len(message)
+        yield md5_sender, message, no_words, no_smiley, no_char, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_toNumber(cur):
     """Function that queries who sent which message to how many persons at which date on which channel with additional informations
-    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree
-    and the extension of the file if it was sent with a file joined.
+    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree,
+    the extension of the file if it was sent with a file joined and the number of words/emojis/char in the message.
     The sender is anonymised using MD5 hashing.
     Only people who were on the channel at the time the message was sent are taken in account as receivers, using the channelmemberhistory table
     from the database. 
@@ -84,10 +90,13 @@ def query_message_from_toNumber(cur):
 
     Returns
     -------
-    List((string, string, string, char, int, datetime, string, string, string))
+    List((string, string, int, int, int string, char, int, datetime, string, string, string))
         A list of tuples containing 
         - A string for the md5 hash of the mail of the sender
         - A string for the message
+        - An int for the number of words in the message (emojis are not counted as words)
+        - An int fot the number of emojis in the message
+        - An int for the number of chars in the message
         - A string for the name of the channel on which the message was sent
         - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
         - An int for the number of receivers.
@@ -112,11 +121,16 @@ def query_message_from_toNumber(cur):
     cur.execute(query)
     rows = cur.fetchall()
     
-    f = lambda (sender, message, channel, channel_type, number_receivers, unix_time, post_id, post_parent_id, file_extension) : (repr(hashlib.md5(sender.encode()).digest()), message, channel, channel_type, number_receivers, datetime.fromtimestamp(unix_time/1000), post_id, post_parent_id, file_extension)
+    def process((sender, message, channel, channel_type, number_receivers, unix_time, post_id, post_parent_id, file_extension)):
+        md5_sender = repr(hashlib.md5(sender.encode()).digest())
+        date = datetime.fromtimestamp(unix_time/1000)
+        no_words, no_smiley = mp.count_number_words_and_smiley(message)
+        no_char = len(message)
+        return md5_sender, message, no_words, no_smiley, no_char, channel, channel_type, number_receivers, date, post_id, post_parent_id, file_extension
 
-    result = map(f, rows)
+    result = map(process, rows)
 
-    row_definition = ("Sender", "Message", "Channel", "ChannelType", "NumberReceivers", "Time", "PostId", "PostParentId", "FileExtension")
+    row_definition = ("Sender", "Message", "NumberWords", "NumberSmileys", "NumberChars", "Channel", "ChannelType", "NumberReceivers", "Time", "PostId", "PostParentId", "FileExtension")
     result.insert(0, row_definition)
 
     return result
@@ -137,7 +151,7 @@ def main():
         #query_result = query_message_from_toNumber(cur)
         query_result = query_message_from_to(cur)
 
-        write_csv(data=query_result, filename='from_message_to_at_complete.csv')
+        write_csv(data=query_result, filename='csv/from_message_to_at_message_count.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
