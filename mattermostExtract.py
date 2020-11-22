@@ -4,12 +4,17 @@ from collections import OrderedDict
 from config import config
 from csv_parser import write_csv
 from datetime import datetime
+import hashlib
 
 
 def query_message_from_to(cur):
-    """Generator function that queries who sent which message to whom at which date. Only people who were on the channel at the
-    time the message was sent are taken in account, using the channelmemberhistory table from the database. Only other people are
-    considered as receivers, not the one sending the message.
+    """Generator function that queries who sent which message to whom at which date on which channel with additional informations
+    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree
+    and the extension of the file if it was sent with a file joined.
+    The sender and receivers are anonymised using MD5 hashing.
+    Only people who were on the channel at the time the message was sent are taken in account as receivers, using the channelmemberhistory table
+    from the database. 
+    Only other people are considered as receivers, not the one sending the message.
 
     Parameters
     ----------
@@ -17,42 +22,61 @@ def query_message_from_to(cur):
 
     Returns
     -------
-    Generator((string, string, string, list<string>, datetime))
-        A list of tuples containing a string for the sender, a string for the message, the channel
-        on which the message was sent, a list of string for the receivers (in the order in which they joined the channel) and a datetime at which
-        the message was sent
+    Generator((string, string, string, char, list<string>, datetime, string, string, string))
+        A list of tuples containing 
+        - A string for the md5 hash of the mail of the sender
+        - A string for the message
+        - A string for the name of the channel on which the message was sent
+        - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
+        - A list of string for the md5 hash of the mail of the receivers (in the order in which they joined the channel)
+        - A datetime at which the message was sent
+        - A string for the id of the post
+        - A string for the parent id of the post (if it a response to another post) or NULL if it not a response
+        - A string for the extension of the file if the message was sent with a document (picture for example) or NULL otherwise
     """
 
     query = """
-        SELECT U.username, P.message,  C.name, (SELECT username from users where users.id = CMH.userid) as receiver, P.createat FROM posts P
+        SELECT U.email AS sender, P.message,  C.name as channel_name, C.type AS channel_type, (SELECT email from users where users.id = CMH.userid) as receiver,
+        P.createat, P.id AS postid, P.parentid as post_parent_id, F.extension as file_extension FROM posts P
         INNER JOIN users U ON P.userid = U.id
         INNER JOIN channelmemberhistory CMH ON P.channelid = CMH.channelid
         INNER JOIN channels C ON P.channelid = C.id
+        LEFT JOIN fileinfo F ON P.id = F.postid
         WHERE P.message!='' AND P.createat > CMH.jointime AND (CMH.leavetime IS NULL OR CMH.leavetime>P.createat)
-        ORDER BY P.createat DESC, U.username ASC, P.message ASC
+        AND C.id NOT IN (SELECT channelid from channelmemberhistory where userid = (SELECT id from users where username='surveybot'))
+        AND P.type!='system_join_channel' AND P.type!='system_add_to_channel' AND P.type!='system_join_team'
+        ORDER BY P.createat DESC, P.message ASC
         """
 
     cur.execute(query)
     rows = cur.fetchall()
 
-    row_definition = ("Sender", "Message", "Channel", "Receivers", "Time")
+    row_definition = ("Sender", "Message", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield row_definition
 
+    #Here we just do a "groupby" to have a list of receivers for the same message and we hash it with md5. We store it in a dictionnary for simplicity.
     message_to_list_receivers = OrderedDict()
-    for sender, message, channel, receiver, unix_time in rows:
-        receivers = message_to_list_receivers.setdefault((sender, message, channel, unix_time), [])
+    for sender, message, channel, channel_type, receiver, unix_time, post_id, post_parent_id, file_extension in rows:
+        hash_receivers = message_to_list_receivers.setdefault((sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), [])
         if(sender!=receiver):
-            receivers.append(receiver)
+            hash_receivers.append(hashlib.md5(receiver.encode()).digest())
+
     
-    for (sender, message, channel, unix_time), receivers in message_to_list_receivers.iteritems():
-        yield sender, message, channel, receivers, datetime.fromtimestamp(unix_time/1000)
+    for (sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.iteritems():
+        md5_sender = repr(hashlib.md5(sender.encode()).digest())
+        date = datetime.fromtimestamp(unix_time/1000)
+        yield md5_sender, message, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_toNumber(cur):
-    """Function that queries who sent which message to how many persons at which date. Only people who were on the channel at the
-    time the message was sent are taken in account, using the channelmemberhistory table from the database. Only other people are
-    counted as receivers, not the one sending the message. This method runs faster than query_message_from_to which generates a list
-    of the receivers instead of the numbers.
+    """Function that queries who sent which message to how many persons at which date on which channel with additional informations
+    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree
+    and the extension of the file if it was sent with a file joined.
+    The sender is anonymised using MD5 hashing.
+    Only people who were on the channel at the time the message was sent are taken in account as receivers, using the channelmemberhistory table
+    from the database. 
+    Only other people are considered as receivers, not the one sending the message.
+    This method runs faster than query_message_from_to because it used the groupby method inside the database to group the number of receivers.
 
     Parameters
     ----------
@@ -60,30 +84,39 @@ def query_message_from_toNumber(cur):
 
     Returns
     -------
-    List((string, string, string, int, datetime))
-        A list of tuples containing a string for the sender, a string for the message, the channel
-        on which the message was sent, the number of receivers and a datetime at which
-        the message was sent
+    List((string, string, string, char, int, datetime, string, string, string))
+        A list of tuples containing 
+        - A string for the md5 hash of the mail of the sender
+        - A string for the message
+        - A string for the name of the channel on which the message was sent
+        - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
+        - An int for the number of receivers.
+        - A datetime at which the message was sent
+        - A string for the id of the post
+        - A string for the parent id of the post (if it a response to another post) or NULL if it not a response
+        - A string for the extension of the file if the message was sent with a document (picture for example) or NULL otherwise
     """
 
-    query = """
-        SELECT U.username, P.message,  C.name, COUNT(CMH.userid)-1 as number_receivers, P.createat FROM posts P
+    query = """SELECT U.email AS sender, P.message,  C.name as channel_name, C.type AS channel_type, COUNT(CMH.userid)-1 as number_receivers,
+        P.createat, P.id AS postid, P.parentid as post_parent_id, F.extension as file_extension FROM posts P
         INNER JOIN users U ON P.userid = U.id
         INNER JOIN channelmemberhistory CMH ON P.channelid = CMH.channelid
         INNER JOIN channels C ON P.channelid = C.id
+        LEFT JOIN fileinfo F ON P.id = F.postid
         WHERE P.message!='' AND P.createat > CMH.jointime AND (CMH.leavetime IS NULL OR CMH.leavetime>P.createat)
-        GROUP BY U.username, P.message, C.name, P.createat
-        ORDER BY P.createat DESC, U.username ASC, P.message ASC
-        """
+        AND C.id NOT IN (SELECT channelid from channelmemberhistory where userid = (SELECT id from users where username='surveybot'))
+        AND P.type!='system_join_channel' AND P.type!='system_add_to_channel' AND P.type!='system_join_team'
+        GROUP BY U.email, P.message, C.name, C.type, P.createat, P.id, F.extension
+        ORDER BY P.createat DESC, P.message ASC"""
     
     cur.execute(query)
     rows = cur.fetchall()
     
-    f = lambda (sender, message, channel_name, number_receivers, unix_time) : (sender, message, channel_name, number_receivers, datetime.fromtimestamp(unix_time/1000))
+    f = lambda (sender, message, channel, channel_type, number_receivers, unix_time, post_id, post_parent_id, file_extension) : (repr(hashlib.md5(sender.encode()).digest()), message, channel, channel_type, number_receivers, datetime.fromtimestamp(unix_time/1000), post_id, post_parent_id, file_extension)
 
     result = map(f, rows)
 
-    row_definition = ("Sender", "Message", "Channel", "Number_Receivers", "Time")
+    row_definition = ("Sender", "Message", "Channel", "ChannelType", "NumberReceivers", "Time", "PostId", "PostParentId", "FileExtension")
     result.insert(0, row_definition)
 
     return result
@@ -104,7 +137,7 @@ def main():
         #query_result = query_message_from_toNumber(cur)
         query_result = query_message_from_to(cur)
 
-        write_csv(data=query_result, filename='from_message_to_at.csv')
+        write_csv(data=query_result, filename='from_message_to_at_complete.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
