@@ -58,7 +58,7 @@ def query_message_from_to(cur):
     cur.execute(query)
     rows = cur.fetchall()
 
-    row_definition = ("Sender", "Message", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    row_definition = ("Sender", "Message", "MessageCleaned", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield row_definition
 
     #Here we just do a "groupby" to have a list of receivers for the same message and we hash them with md5. We store it in a dictionnary for simplicity.
@@ -72,9 +72,9 @@ def query_message_from_to(cur):
     for (sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.iteritems():
         md5_sender = hashlib.md5(sender.encode()).hexdigest()
         date = datetime.fromtimestamp(unix_time/1000)
-        no_words, emojis, mentions = mp.count_words_emojis_mentions(message)
-        no_char = len(message)
-        yield md5_sender, message, no_words, no_char, emojis, mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
+        no_char = len(message_cleaned)
+        yield md5_sender, message, message_cleaned, no_words, no_char, emojis, mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_toNumber(cur):
@@ -128,13 +128,13 @@ def query_message_from_toNumber(cur):
     def process((sender, message, channel, channel_type, number_receivers, unix_time, post_id, post_parent_id, file_extension)):
         md5_sender = hashlib.md5(sender.encode()).hexdigest()
         date = datetime.fromtimestamp(unix_time/1000)
-        no_words, emojis, mentions = mp.count_words_emojis_mentions(message)
-        no_char = len(message)
-        return md5_sender, message, no_words, no_char, emojis, mentions, channel, channel_type, number_receivers, date, post_id, post_parent_id, file_extension
+        no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
+        no_char = len(message_cleaned)
+        return md5_sender, message, message_cleaned, no_words, no_char, emojis, mentions, channel, channel_type, number_receivers, date, post_id, post_parent_id, file_extension
 
     result = map(process, rows)
 
-    row_definition = ("Sender", "Message", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "NumberReceivers", "Time", "PostId", "PostParentId", "FileExtension")
+    row_definition = ("Sender", "Message", "MessageCleaned", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "NumberReceivers", "Time", "PostId", "PostParentId", "FileExtension")
     result.insert(0, row_definition)
 
     return result
