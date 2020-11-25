@@ -9,6 +9,37 @@ import message_processing as mp
 import base64
 
 
+def create_map_users_mail(cur):
+    query = "SELECT username, email FROM users"
+    
+    cur.execute(query)
+    rows = cur.fetchall()
+
+    users_to_mail = dict()
+
+    for row in rows:
+        username = row[0]
+        email = row[1]
+        users_to_mail[username] = email    
+
+    return users_to_mail
+
+
+def hashed_mails_from_mentions(users_to_mail, mentions, hashed_receivers):
+
+    hashed_mails = set()
+    for mention in mentions:
+        if(mention == "all" or mention == "channel" or mention == "here"):
+            hashed_mails.update(hashed_receivers)
+        else:
+            mail = users_to_mail.get(mention)
+            if(mail != None):
+                hashed_mails.add(hashlib.md5(mail.encode()).hexdigest())
+    return hashed_mails
+
+
+
+
 def query_message_from_to(cur):
     """Generator function that queries who sent which message to whom at which date on which channel with additional informations
     about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree,
@@ -74,7 +105,9 @@ def query_message_from_to(cur):
         date = datetime.fromtimestamp(unix_time/1000)
         no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
         no_char = len(message_cleaned)
-        yield md5_sender, message, message_cleaned, no_words, no_char, emojis, mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        users_to_mail = create_map_users_mail(cur)
+        hashed_mails_mentions = list(hashed_mails_from_mentions(users_to_mail, mentions, hash_receivers))
+        yield md5_sender, message, message_cleaned, no_words, no_char, emojis, hashed_mails_mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_toNumber(cur):
@@ -155,7 +188,7 @@ def main():
         #query_result = query_message_from_toNumber(cur)
         query_result = query_message_from_to(cur)
 
-        write_csv(data=query_result, filename='csv/from_message_to_at_message_count.csv')
+        write_csv(data=query_result, filename='csv/from_message_to_at_message_mentions.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
