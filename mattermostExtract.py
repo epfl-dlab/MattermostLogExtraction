@@ -8,6 +8,22 @@ import hashlib
 import message_processing as mp
 
 
+def anonymise_non_public_channel(channel_name, channel_type):
+    """Functions that anonymise (using md5 hashing of the channel_name) the channel if it is not public.
+
+    Parameters
+    ----------
+    channel_name : The name of the channel.
+    channel_type: The type of the channel.
+
+    Returns
+    -------
+    String:
+        The channel name if it is public and the md5 hashing of its name otherwise.
+
+    """
+    return hashlib.md5(channel_name.encode()).hexdigest() if(not channel_type == 'O') else channel_name
+
 def create_map_users_hashed_mail(cur):
     """Functions that creates a dictionnary with the username as key and the md5 hashing of their mail as value.
 
@@ -17,7 +33,8 @@ def create_map_users_hashed_mail(cur):
 
     Returns
     -------
-    Dictionnary(String, String): A dictionnary with the username of the users as key and the md5 hashing of their mail as value.
+    Dictionnary(String, String): 
+        A dictionnary with the username of the users as key and the md5 hashing of their mail as value.
     """
 
     query = "SELECT username, email FROM users"
@@ -46,7 +63,8 @@ def hashed_mails_from_mentions(mentions, users_to_hashed_mail, hashed_receivers)
 
     Returns
     -------
-    Set(String): A set with the md5 hashing of the mail of the people who were mentionned in the message or an empty set if nobody was mentionned.
+    Set(String): 
+        A set with the md5 hashing of the mail of the people who were mentionned in the message or an empty set if nobody was mentionned.
     """
     hashed_mails = set()
     for mention in mentions:
@@ -98,10 +116,11 @@ def processing_data(raw_data, users_to_mail):
 
     for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) in raw_data:
         date = datetime.fromtimestamp(unix_time/1000)
+        anonymised_channel = anonymise_non_public_channel(channel, channel_type)
         no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
         no_char = len(message_cleaned)
         hashed_mails_mentions = list(hashed_mails_from_mentions(mentions, users_to_mail, hash_receivers))
-        yield hashed_sender, message, message_cleaned, no_words, no_char, emojis, hashed_mails_mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        yield hashed_sender, message, message_cleaned, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_to(cur):
@@ -189,7 +208,7 @@ def main():
     
     print("Start processing the data.")
     data_processed = processing_data(raw_data, users_to_hashed_mail)
-    write_csv(data=data_processed, filename='csv/from_message_to_at_message_mentions.csv')
+    write_csv(data=data_processed, filename='csv/from_message_to_channel_anonymised.csv')
 
 if __name__ == '__main__':
     main()
