@@ -1,4 +1,19 @@
 def clean_message_extract_emojis_mentions(message):
+    """Function that goes through the message, clean it by removing useless spaces and emojis and extracts how many words 
+    the message contains, all the mentions and all the emojis that are in the message
+
+    Parameters
+    ----------
+    message : The raw message
+
+    Returns
+    -------
+    (int, list(string), set(string), string):
+        - An int for the number of words (mentions are counted as words, not emojis)
+        - A list with all the emojis
+        - A set with all the mentions
+        - A string with the message cleaned (without emojis and useless spaces)
+    """
     no_words = 0
     
     emojis = []

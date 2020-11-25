@@ -6,45 +6,108 @@ from csv_parser import write_csv
 from datetime import datetime
 import hashlib
 import message_processing as mp
-import base64
 
 
-def create_map_users_mail(cur):
+def create_map_users_hashed_mail(cur):
+    """Functions that creates a dictionnary with the username as key and the md5 hashing of their mail as value.
+
+    Parameters
+    ----------
+    cur : The cursor to write query to the database.
+
+    Returns
+    -------
+    Dictionnary(String, String): A dictionnary with the username of the users as key and the md5 hashing of their mail as value.
+    """
+
     query = "SELECT username, email FROM users"
     
     cur.execute(query)
     rows = cur.fetchall()
 
-    users_to_mail = dict()
+    users_to_hashed_mail = dict()
 
     for row in rows:
         username = row[0]
         email = row[1]
-        users_to_mail[username] = email    
+        users_to_hashed_mail[username] = hashlib.md5(email.encode()).hexdigest()    
 
-    return users_to_mail
+    return users_to_hashed_mail
 
 
-def hashed_mails_from_mentions(users_to_mail, mentions, hashed_receivers):
+def hashed_mails_from_mentions(mentions, users_to_hashed_mail, hashed_receivers):
+    """Functions that processes the mentions to extract the md5 of the mail of the people who were mentionned.
 
+    Parameters
+    ----------
+    mentions : The list of all the mentions found in the message.
+    users_to_hashed_mail: A dictionnary from the username of the users to the md5 hashing of their emails.
+    hashed_receivers: The list of all the md5 hash of the email of the people on the channel when the message was sent.
+
+    Returns
+    -------
+    Set(String): A set with the md5 hashing of the mail of the people who were mentionned in the message or an empty set if nobody was mentionned.
+    """
     hashed_mails = set()
     for mention in mentions:
         if(mention == "all" or mention == "channel" or mention == "here"):
+            #Put all the members present on the channel
             hashed_mails.update(hashed_receivers)
         else:
-            mail = users_to_mail.get(mention)
-            if(mail != None):
-                hashed_mails.add(hashlib.md5(mail.encode()).hexdigest())
+            hashed_mail = users_to_hashed_mail.get(mention)
+            if(hashed_mail != None):
+                hashed_mails.add(hashed_mail)
     return hashed_mails
 
 
+def processing_data(raw_data, users_to_mail):
+    """Function that processes the raw_data to extract additional features or tranform some formats.
+    Transform the unix timestamp to a date.
+    Clean all the messages by removing the emojis and the useless spaces and extracts the following features from the messages:
+    - The number of words in the message (mentions are counted as words, not emojis)
+    - The number of chars in the message (after the message was cleaned)
+    - A list of all the emojis in the message
+    - A set of all the mentions
+
+    Parameters
+    ----------
+    raw_data : The list with the data returned by the query
+    users_to_mail: A dictionnary from the username of the users to their emails.
+
+    Returns
+    -------
+    Generator((string, string, String, int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
+        A generator of tuples containing 
+        - A string for the md5 hash of the mail of the sender
+        - A string for the message
+        - A string for the message cleaned
+        - An int for the number of words in the message (emojis are not counted as words)
+        - An int for the number of chars in the message after cleaning
+        - A list of string with every emojis in the message
+        - A set of strings with all the md5 hash of the mail of the people who were mentioned (@)
+        - A string for the name of the channel on which the message was sent
+        - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
+        - A list of string for the md5 hash of the mail of the receivers (in the order in which they joined the channel)
+        - A datetime at which the message was sent
+        - A string for the id of the post
+        - A string for the parent id of the post (if it a response to another post) or None if it not a response
+        - A string for the extension of the file if the message was sent with a document (picture for example) or None otherwise
+    """
+    row_definition = ("Sender", "Message", "MessageCleaned", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    yield row_definition
+
+    for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) in raw_data:
+        date = datetime.fromtimestamp(unix_time/1000)
+        no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
+        no_char = len(message_cleaned)
+        hashed_mails_mentions = list(hashed_mails_from_mentions(mentions, users_to_mail, hash_receivers))
+        yield hashed_sender, message, message_cleaned, no_words, no_char, emojis, hashed_mails_mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_to(cur):
-    """Generator function that queries who sent which message to whom at which date on which channel with additional informations
-    about the message such as the id of the post, its parent id (if it was a reply to another post) to be able to construct a tree,
-    the extension of the file if it was sent with a file joined and the number of words/char in the message and a list of emojis and 
-    a set of mentions (with raw data for the moment)
+    """Function that queries who sent which message to whom with additional informations such as the channel name and the type of the
+    channel, the id of the post and its parent id (if it was a reply to another post) to be able to construct a tree, the extension of
+    the file if it was sent with a file joined.
     The sender and receivers are anonymised using MD5 hashing.
     Only people who were on the channel at the time the message was sent are taken in account as receivers, using the channelmemberhistory
     table from the database. 
@@ -52,25 +115,21 @@ def query_message_from_to(cur):
 
     Parameters
     ----------
-    cur : The cursor to write query to the database
+    cur : The cursor to write query to the database.
 
     Returns
     -------
-    Generator((string, string, int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
+    List((string, string, int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
         A generator of tuples containing 
         - A string for the md5 hash of the mail of the sender
         - A string for the message
-        - An int for the number of words in the message (emojis are not counted as words)
-        - An int for the number of chars in the message
-        - An list of string with every emojis in the message
-        - A set of strings with all the mentions (as raw text for now on)
         - A string for the name of the channel on which the message was sent
         - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
         - A list of string for the md5 hash of the mail of the receivers (in the order in which they joined the channel)
-        - A datetime at which the message was sent
+        - An int for the unix timestamp at which the message was sent
         - A string for the id of the post
-        - A string for the parent id of the post (if it a response to another post) or NULL if it not a response
-        - A string for the extension of the file if the message was sent with a document (picture for example) or NULL otherwise
+        - A string for the parent id of the post (if it a response to another post) or None if it not a response
+        - A string for the extension of the file if the message was sent with a document (picture for example) or None otherwise
     """
 
     query = """
@@ -89,25 +148,16 @@ def query_message_from_to(cur):
     cur.execute(query)
     rows = cur.fetchall()
 
-    row_definition = ("Sender", "Message", "MessageCleaned", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
-    yield row_definition
-
-    #Here we just do a "groupby" to have a list of receivers for the same message and we hash them with md5. We store it in a dictionnary for simplicity.
+    #Here we just do a "groupby" to have a list of receivers for the same message and we hash them and the senders directly with md5.
     message_to_list_receivers = OrderedDict()
     for sender, message, channel, channel_type, receiver, unix_time, post_id, post_parent_id, file_extension in rows:
-        hash_receivers = message_to_list_receivers.setdefault((sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), [])
+        hashed_sender = hashlib.md5(sender.encode()).hexdigest()
+        hash_receivers = message_to_list_receivers.setdefault((hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), [])
         if(sender!=receiver):
             hash_receivers.append(hashlib.md5(receiver.encode()).hexdigest())
 
-    
-    for (sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.iteritems():
-        md5_sender = hashlib.md5(sender.encode()).hexdigest()
-        date = datetime.fromtimestamp(unix_time/1000)
-        no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
-        no_char = len(message_cleaned)
-        users_to_mail = create_map_users_mail(cur)
-        hashed_mails_mentions = list(hashed_mails_from_mentions(users_to_mail, mentions, hash_receivers))
-        yield md5_sender, message, message_cleaned, no_words, no_char, emojis, hashed_mails_mentions, channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+    #Flatten the tuples before returning
+    return [(hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.iteritems()]
 
 
 def main():
@@ -120,11 +170,12 @@ def main():
         params = config()
         conn = psycopg2.connect(**params)
         cur = conn.cursor()
+
         print("Succesfully connected to the database. Will start writing queries.")
+        raw_data = query_message_from_to(cur)
+        users_to_hashed_mail = create_map_users_hashed_mail(cur)
 
-        query_result = query_message_from_to(cur)
-
-        write_csv(data=query_result, filename='csv/from_message_to_at_message_mentions.csv')
+        print("Queries ran succesfully.")
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
@@ -135,6 +186,10 @@ def main():
         if conn is not None:
             conn.close()
             print("Database connection closed.")
+    
+    print("Start processing the data.")
+    data_processed = processing_data(raw_data, users_to_hashed_mail)
+    write_csv(data=data_processed, filename='csv/from_message_to_at_message_mentions.csv')
 
 if __name__ == '__main__':
     main()
