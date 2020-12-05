@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import psycopg2
 import sys
 from collections import OrderedDict
@@ -22,7 +23,7 @@ def anonymise_non_public_channel(channel_name, channel_type):
         The channel name if it is public and the md5 hashing of its name otherwise.
 
     """
-    return hashlib.md5(channel_name.encode()).hexdigest() if(not channel_type == 'O') else channel_name
+    return hashlib.md5(channel_name.encode()).hexdigest() if (not channel_type == 'O') else channel_name
 
 def create_map_users_hashed_mail(cur):
     """Functions that creates a dictionnary with the username as key and the md5 hashing of their mail as value.
@@ -78,7 +79,7 @@ def hashed_mails_from_mentions(mentions, users_to_hashed_mail, hashed_receivers)
     return hashed_mails
 
 
-def processing_data(raw_data, users_to_mail):
+def process_data(raw_data, users_to_mail):
     """Function that processes the raw_data to extract additional features or tranform some formats.
     Transform the unix timestamp to a date.
     Clean all the messages by removing the emojis and the useless spaces and extracts the following features from the messages:
@@ -94,11 +95,13 @@ def processing_data(raw_data, users_to_mail):
 
     Returns
     -------
-    Generator((string, string, String, int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
+    Generator((string, string, String, String, (String, String) int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
         A generator of tuples containing 
         - A string for the md5 hash of the mail of the sender
         - A string for the message
         - A string for the message cleaned
+        - A String for the language
+        - A (String, String) tuple for the entities
         - An int for the number of words in the message (emojis are not counted as words)
         - An int for the number of chars in the message after cleaning
         - A list of string with every emojis in the message
@@ -111,7 +114,9 @@ def processing_data(raw_data, users_to_mail):
         - A string for the parent id of the post (if it a response to another post) or None if it not a response
         - A string for the extension of the file if the message was sent with a document (picture for example) or None otherwise
     """
-    row_definition = ("Sender", "Message", "MessageCleaned", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    language_to_nlp_model = mp.create_language_to_nlp_model()
+
+    row_definition = ("Sender", "Message", "MessageCleaned", "Language", "Entities", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield row_definition
 
     for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) in raw_data:
@@ -120,11 +125,12 @@ def processing_data(raw_data, users_to_mail):
         no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
         no_char = len(message_cleaned)
         hashed_mails_mentions = list(hashed_mails_from_mentions(mentions, users_to_mail, hash_receivers))
-        yield hashed_sender, message, message_cleaned, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        entities, language = mp.entity_processing(message_cleaned, language_to_nlp_model)
+        yield hashed_sender, message, message_cleaned, language, entities, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_to(cur):
-    """Function that queries who sent which message to whom with additional informations such as the channel name and the type of the
+    """Function that queries in the database who sent which message to whom with additional informations such as the channel name and the type of the
     channel, the id of the post and its parent id (if it was a reply to another post) to be able to construct a tree, the extension of
     the file if it was sent with a file joined.
     The sender and receivers are anonymised using MD5 hashing.
@@ -184,7 +190,6 @@ def main():
     conn = None
     cur = None
     print("Connecting to the PostgresSQL database...")
-
     try:
         params = config()
         conn = psycopg2.connect(**params)
@@ -196,6 +201,10 @@ def main():
 
         print("Queries ran succesfully.")
 
+        print("Start processing the data.")
+        data_processed = process_data(raw_data, users_to_hashed_mail)
+        write_csv(data=data_processed, filename='csv/from_message_to_entities.csv')
+
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
         print("Programm exits.")
@@ -205,10 +214,6 @@ def main():
         if conn is not None:
             conn.close()
             print("Database connection closed.")
-    
-    print("Start processing the data.")
-    data_processed = processing_data(raw_data, users_to_hashed_mail)
-    write_csv(data=data_processed, filename='csv/from_message_to_channel_anonymised.csv')
 
 if __name__ == '__main__':
     main()

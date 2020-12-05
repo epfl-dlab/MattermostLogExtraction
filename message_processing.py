@@ -1,3 +1,8 @@
+# -*- coding: utf-8 -*-
+from langdetect import detect, detect_langs, DetectorFactory
+import spacy
+
+
 def clean_message_extract_emojis_mentions(message):
     """Function that goes through the message, clean it by removing useless spaces and emojis and extracts how many words 
     the message contains, all the mentions and all the emojis that are in the message
@@ -75,3 +80,65 @@ def clean_message_extract_emojis_mentions(message):
         message_cleaned = message_cleaned[:-1]
     
     return no_words, emojis, mentions, message_cleaned
+
+
+def entity_processing(message, language_to_nlp_model):
+    """Function that retrieve the language of the message and then retrieves the entities using the correspondong spacy model.
+
+    Parameters
+    ----------
+    message : The message cleaned
+    language_to_nlp_model: The dictionnary between the language abbreviation and the spacy model.
+
+    Returns
+    -------
+    (list(String, String), String):
+        - The entities of the message
+        - The abbreviation (2 chars) of the language of the message
+    """
+    if(message == ""):
+        return None, None
+
+    #Spacy need to work with unicode, not by default in python 2
+    unicode_message = message.decode("utf-8")
+
+    DetectorFactory.seed = 0
+    language = detect(unicode_message)
+
+    nlp = language_to_nlp_model.get(language, language_to_nlp_model.get("default"))
+    if(nlp == None): #Should never happen
+        return None, language
+
+    doc = nlp(unicode_message)
+    sentences = [sent for sent in doc.sents]
+    tokens = [token.text for token in doc]
+    pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8")) for token in doc]
+
+    return pos_tagged, language
+
+
+
+def create_language_to_nlp_model():
+    """Function that loads the different spacy model used to analyse the data in a dictionnary with the abbreviation of the language.
+    The recognised languages are English, German, French and Italian, for the other case (key="default"), the multilingual model is used.
+
+    Returns
+    -------
+    dict(String, spacy.lang.):
+        A dictionnary with the abrbreviation of the languages as key and the corresponding NLP model.
+    """
+
+    print("Start loading the models.")
+    language_to_nlp_model = dict()
+
+    language_to_nlp_model["en"] = spacy.load("en_core_web_sm")
+    language_to_nlp_model["fr"] = spacy.load("fr_core_news_sm")
+    language_to_nlp_model["de"] = spacy.load("de_core_news_sm")
+    language_to_nlp_model["it"] = spacy.load("it_core_news_sm")
+    multi_lingual_nlp = spacy.load("xx_ent_wiki_sm")
+    multi_lingual_nlp.add_pipe(multi_lingual_nlp.create_pipe('sentencizer')) #Must add it in order to work
+    language_to_nlp_model["default"] = multi_lingual_nlp
+
+    print("Done loading the models.")
+
+    return language_to_nlp_model
