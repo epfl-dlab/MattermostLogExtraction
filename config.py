@@ -1,4 +1,4 @@
-from ConfigParser import ConfigParser
+from configparser import ConfigParser
 
 def config(filename = "databaseSetup/database.ini", section="postgresql"):
     """Extract the config informations.

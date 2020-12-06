@@ -7,6 +7,7 @@ from csv_parser import write_csv
 from datetime import datetime
 import hashlib
 import message_processing as mp
+import traceback
 
 
 def anonymise_non_public_channel(channel_name, channel_type):
@@ -114,18 +115,40 @@ def process_data(raw_data, users_to_mail):
         - A string for the parent id of the post (if it a response to another post) or None if it not a response
         - A string for the extension of the file if the message was sent with a document (picture for example) or None otherwise
     """
-    language_to_nlp_model = mp.create_language_to_nlp_model()
+    anonymised_channel_to_messages = dict()
+    data_first_traversal = list()
 
-    row_definition = ("Sender", "Message", "MessageCleaned", "Language", "Entities", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
-    yield row_definition
-
+    #First traversal, we clean all the messages, anonymise the channels and regroup the cleaned messages by channel to later on analyse the language by channel
     for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) in raw_data:
         date = datetime.fromtimestamp(unix_time/1000)
-        anonymised_channel = anonymise_non_public_channel(channel, channel_type)
         no_words, emojis, mentions, message_cleaned = mp.clean_message_extract_emojis_mentions(message)
+        anonymised_channel = anonymise_non_public_channel(channel, channel_type)
+
+        if(message_cleaned != ""):
+            channelMessage = anonymised_channel_to_messages.get(anonymised_channel)
+            channelMessage = message_cleaned if channelMessage == None else channelMessage + '\n' + message_cleaned
+            anonymised_channel_to_messages[anonymised_channel] = channelMessage
+
+        data_first_traversal.append((hashed_sender, message, message_cleaned, no_words, emojis, mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension))  
+
+    #Detect the language of each channel and load the models
+    channel_to_language = mp.detect_channel_language(anonymised_channel_to_messages)
+    language_to_nlp_model = mp.create_language_to_nlp_model()
+
+    #yield the definitions of the columns as first row
+    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Entities", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    yield definitions
+
+    #Second traversal, we process the messages by getting the language and loading the corresponding nlp model
+    for (hashed_sender, message, message_cleaned, no_words, emojis, mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension) in data_first_traversal:
+        
         no_char = len(message_cleaned)
         hashed_mails_mentions = list(hashed_mails_from_mentions(mentions, users_to_mail, hash_receivers))
-        entities, language = mp.entity_processing(message_cleaned, language_to_nlp_model)
+        language = channel_to_language.get(anonymised_channel)
+        nlp = language_to_nlp_model.get(language, language_to_nlp_model.get("default"))
+
+        entities = mp.entity_processing(message_cleaned, nlp)
+
         yield hashed_sender, message, message_cleaned, language, entities, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
@@ -182,7 +205,7 @@ def query_message_from_to(cur):
             hash_receivers.append(hashlib.md5(receiver.encode()).hexdigest())
 
     #Flatten the tuples before returning
-    return [(hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.iteritems()]
+    return [(hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension, hash_receivers) for (hashed_sender, message, channel, channel_type, unix_time, post_id, post_parent_id, file_extension), hash_receivers in message_to_list_receivers.items()]
 
 
 def main():
@@ -203,10 +226,11 @@ def main():
 
         print("Start processing the data.")
         data_processed = process_data(raw_data, users_to_hashed_mail)
-        write_csv(data=data_processed, filename='csv/from_message_to_entities.csv')
+        write_csv(data=data_processed, filename='csv/test.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
+        traceback.print_exc()
         print("Programm exits.")
     finally:
         if cur is not None:

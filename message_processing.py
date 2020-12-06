@@ -82,39 +82,61 @@ def clean_message_extract_emojis_mentions(message):
     return no_words, emojis, mentions, message_cleaned
 
 
-def entity_processing(message, language_to_nlp_model):
-    """Function that retrieve the language of the message and then retrieves the entities using the correspondong spacy model.
+def detect_channel_language(anonymised_channel_to_messages):
+    """Function that detect the language of each channel (set to None if the message if empty).
+
+    Parameters
+    ----------
+    anonymised_channel_to_messages : A dictionnary with the anonymised channel as keys and the concatenation of all messages sent on the channel as value.
+
+    Returns
+    -------
+    dict(String, String):
+        A dictionnary with the anonymised channel as key and the abreviation (string of 2 chars) of the language.
+    """
+    #Set the seed such that the result is always the same
+    DetectorFactory.seed = 0
+
+    channel_to_language = dict()
+
+    for anonymised_channel, messages in  anonymised_channel_to_messages.items():
+
+        if(messages == None or messages==""):#Should never happen
+            channel_to_language[anonymised_channel] = None
+        else:
+            unicode_messages = messages.decode("utf-8")
+            language = detect(unicode_messages)
+            channel_to_language[anonymised_channel] = language
+    
+    return channel_to_language
+
+
+def entity_processing(message, nlp):
+    """Function that retrieves the entities using the correspondong spacy model.
 
     Parameters
     ----------
     message : The message cleaned
-    language_to_nlp_model: The dictionnary between the language abbreviation and the spacy model.
+    nlp: The nlp model corresponding to the language of the channel of the message
 
     Returns
     -------
-    (list(String, String), String):
-        - The entities of the message
-        - The abbreviation (2 chars) of the language of the message
+    list(String, String):
+        The entities of the message
     """
     if(message == ""):
-        return None, None
+        return None
+
+    if(nlp == None):
+        raise Exception("nlp model shouldn't be None")
 
     #Spacy need to work with unicode, not by default in python 2
     unicode_message = message.decode("utf-8")
 
-    DetectorFactory.seed = 0
-    language = detect(unicode_message)
-
-    nlp = language_to_nlp_model.get(language, language_to_nlp_model.get("default"))
-    if(nlp == None): #Should never happen
-        return None, language
-
     doc = nlp(unicode_message)
-    sentences = [sent for sent in doc.sents]
-    tokens = [token.text for token in doc]
     pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8")) for token in doc]
 
-    return pos_tagged, language
+    return pos_tagged
 
 
 
