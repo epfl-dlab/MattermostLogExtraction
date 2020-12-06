@@ -4,7 +4,7 @@ import spacy
 
 
 def clean_message_extract_emojis_mentions(message):
-    """Function that goes through the message, clean it by removing useless spaces and emojis and extracts how many words 
+    """Function that goes through the message, clean it by removing useless spaces, emojis and mentions and extracts how many words 
     the message contains, all the mentions and all the emojis that are in the message
 
     Parameters
@@ -14,10 +14,10 @@ def clean_message_extract_emojis_mentions(message):
     Returns
     -------
     (int, list(string), set(string), string):
-        - An int for the number of words (mentions are counted as words, not emojis)
+        - An int for the number of words (mentions and emojis are not counted)
         - A list with all the emojis
         - A set with all the mentions
-        - A string with the message cleaned (without emojis and useless spaces)
+        - A string with the message cleaned (without emojis, mentions and useless spaces)
     """
     no_words = 0
     
@@ -36,16 +36,18 @@ def clean_message_extract_emojis_mentions(message):
     for ch in message:
 
         if(ch.isspace()):
-            if(not already_space):
-                message_cleaned += ch
-                already_space=True
             if(start_word):
                 start_word = False
                 no_words += 1
             if(start_mention):
                 start_mention = False
                 mentions.add(mention)
+                message_cleaned = message_cleaned[:-(len(mention)+2)] if (len(mention)+2<=len(message_cleaned) and message_cleaned[len(message_cleaned)- len(mention)-2].isspace()) else message_cleaned[:-(len(mention)+1)]
+                no_words-=1
                 mention = ""  
+            if(not already_space):
+                message_cleaned += ch
+                already_space=True
             start_emoji = False
         else:
             message_cleaned += ch
@@ -75,6 +77,8 @@ def clean_message_extract_emojis_mentions(message):
         no_words += 1
     if(start_mention):
         mentions.add(mention)
+        message_cleaned = message_cleaned[:-(len(mention)+2)] if (len(mention)+2<=len(message_cleaned)) else message_cleaned[:-(len(mention)+1)]
+        no_words-=1
     #Remove the last char if it is a space
     if(message_cleaned[len(message_cleaned)-1].isspace()):
         message_cleaned = message_cleaned[:-1]
