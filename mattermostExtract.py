@@ -136,7 +136,7 @@ def process_data(raw_data, users_to_mail):
     language_to_nlp_model = mp.create_language_to_nlp_model()
 
     #yield the definitions of the columns as first row
-    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Entities", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Tags", "NamedEntities", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield definitions
 
     #Second traversal, we process the messages by getting the language and loading the corresponding nlp model
@@ -147,9 +147,11 @@ def process_data(raw_data, users_to_mail):
         language = channel_to_language.get(anonymised_channel)
         nlp = language_to_nlp_model.get(language, language_to_nlp_model.get("default"))
 
-        entities = mp.entity_processing(message_cleaned, nlp)
+        pos_tagged, named_entities = mp.entity_processing(message_cleaned, nlp)
 
-        yield hashed_sender, message, message_cleaned, language, entities, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        sentiment_analysis = mp.sentimentAnalysis(message, language)
+
+        yield hashed_sender, message, message_cleaned, language, pos_tagged, named_entities, sentiment_analysis, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_to(cur):
@@ -226,7 +228,7 @@ def main():
 
         print("Start processing the data.")
         data_processed = process_data(raw_data, users_to_hashed_mail)
-        write_csv(data=data_processed, filename='csv/test.csv')
+        write_csv(data=data_processed, filename='csv/from_message_to_sentiment.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))

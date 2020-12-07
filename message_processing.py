@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from langdetect import detect, detect_langs, DetectorFactory
 import spacy
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 
 def clean_message_extract_emojis_mentions(message):
@@ -125,11 +126,12 @@ def entity_processing(message, nlp):
 
     Returns
     -------
-    list(String, String):
-        The entities of the message
+    (list((String, String)), List(String, String):
+        - The tags of the messages
+        - The named entities of the message
     """
     if(message == ""):
-        return None
+        return None, None
 
     if(nlp == None):
         raise Exception("nlp model shouldn't be None")
@@ -138,9 +140,12 @@ def entity_processing(message, nlp):
     unicode_message = message.decode("utf-8")
 
     doc = nlp(unicode_message)
-    pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8")) for token in doc]
+    
+    #pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8"), token.tag_.encode("utf-8"), idx) for idx, token in enumerate(doc)]
+    pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8"), token.tag_.encode("utf-8")) for token in doc]
+    named_entities = [(ent.text.encode("utf-8"), ent.label_.encode("utf-8")) for ent in doc.ents]
 
-    return pos_tagged
+    return pos_tagged, named_entities
 
 
 
@@ -168,3 +173,25 @@ def create_language_to_nlp_model():
     print("Done loading the models.")
 
     return language_to_nlp_model
+
+def sentimentAnalysis(message, language):
+    """Function that gives score for the positivity/neutrality/negativity of sentiment in the message. 
+    It only analyses english messages and return None for other languages.
+
+    Parameters
+    ----------
+    message : The message (not cleaned, vader can analyse emojis).
+    language: The language of the message.
+
+    Returns
+    -------
+    dict(String, Int):
+        A dictionnary with the sentiment as key (neg, neu, pos and compound) and a value between 0 and 1 which is the intensity of that emotion.
+    """
+    if language != "en":
+        return None
+    
+    analyzer = SentimentIntensityAnalyzer()
+    vs = analyzer.polarity_scores(message)
+    
+    return vs
