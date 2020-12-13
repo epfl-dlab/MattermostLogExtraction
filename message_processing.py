@@ -168,7 +168,7 @@ def create_language_to_nlp_model():
 
     return language_to_nlp_model
 
-def sentimentAnalysis(message, language):
+def sentiment_analysis(message, language):
     """Function that gives score for the positivity/neutrality/negativity of sentiment in the message. 
     It only analyses english messages and return None for other languages.
 
@@ -189,3 +189,23 @@ def sentimentAnalysis(message, language):
     vs = analyzer.polarity_scores(message)
     
     return vs
+
+def categories_analysis(message, lexicon, language):
+    """Function that search the categories of words contained in the message and their occurence (normalised).
+
+    Parameters
+    ----------
+    message : The message cleaned.
+    lexicon: The empath lexicon with categories
+    language: The language of the message.
+
+    Returns
+    -------
+    dict(String, double):
+        A dictionnary with the categories as key and their normalised occurences as value. Only categories where the occurence is strictly positive are taken in account.
+    """
+    if language != "en" or message == "":
+        return None
+
+    categories_to_occurence = lexicon.analyze(message, normalize=True)
+    return {categorie: occurence for categorie, occurence in categories_to_occurence.items() if occurence>0}

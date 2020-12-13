@@ -8,6 +8,7 @@ from datetime import datetime
 import hashlib
 import message_processing as mp
 import traceback
+from empath import Empath
 
 
 def anonymise_non_public_channel(channel_name, channel_type):
@@ -136,8 +137,10 @@ def process_data(raw_data, users_to_mail):
     language_to_nlp_model = mp.create_language_to_nlp_model()
 
     #yield the definitions of the columns as first row
-    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Tags", "NamedEntities", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Tags", "NamedEntities", "Categories", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield definitions
+
+    lexicon = Empath()
 
     #Second traversal, we process the messages by getting the language and loading the corresponding nlp model
     for (hashed_sender, message, message_cleaned, no_words, emojis, mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension) in data_first_traversal:
@@ -149,9 +152,11 @@ def process_data(raw_data, users_to_mail):
 
         pos_tagged, named_entities = mp.entity_processing(message_cleaned, nlp)
 
-        sentiment_analysis = mp.sentimentAnalysis(message, language)
+        sentiment_analysis = mp.sentiment_analysis(message, language)
 
-        yield hashed_sender, message, message_cleaned, language, pos_tagged, named_entities, sentiment_analysis, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        categories = mp.categories_analysis(message_cleaned, lexicon, language)
+
+        yield hashed_sender, message, message_cleaned, language, pos_tagged, named_entities, categories, sentiment_analysis, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_to(cur):
@@ -228,7 +233,7 @@ def main():
 
         print("Start processing the data.")
         data_processed = process_data(raw_data, users_to_hashed_mail)
-        write_csv(data=data_processed, filename='csv/from_message_to_sentiment.csv')
+        write_csv(data=data_processed, filename='csv/test.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))
