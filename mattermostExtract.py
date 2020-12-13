@@ -145,7 +145,7 @@ def process_data(raw_data, users_to_mail):
         no_char = len(message_cleaned)
         hashed_mails_mentions = list(hashed_mails_from_mentions(mentions, users_to_mail, hash_receivers))
         language = channel_to_language.get(anonymised_channel)
-        nlp = language_to_nlp_model.get(language, language_to_nlp_model.get("default"))
+        nlp = language_to_nlp_model.get(language)
 
         pos_tagged, named_entities = mp.entity_processing(message_cleaned, nlp)
 

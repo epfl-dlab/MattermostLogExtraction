@@ -130,11 +130,8 @@ def entity_processing(message, nlp):
         - The tags of the messages
         - The named entities of the message
     """
-    if(message == ""):
+    if(message == "" or nlp == None):
         return None, None
-
-    if(nlp == None):
-        raise Exception("nlp model shouldn't be None")
 
     #Spacy need to work with unicode, not by default in python 2
     unicode_message = message.decode("utf-8")
@@ -151,7 +148,7 @@ def entity_processing(message, nlp):
 
 def create_language_to_nlp_model():
     """Function that loads the different spacy model used to analyse the data in a dictionnary with the abbreviation of the language.
-    The recognised languages are English, German, French and Italian, for the other case (key="default"), the multilingual model is used.
+    The recognised languages are English, German, French and Italian.
 
     Returns
     -------
@@ -166,9 +163,6 @@ def create_language_to_nlp_model():
     language_to_nlp_model["fr"] = spacy.load("fr_core_news_sm")
     language_to_nlp_model["de"] = spacy.load("de_core_news_sm")
     language_to_nlp_model["it"] = spacy.load("it_core_news_sm")
-    multi_lingual_nlp = spacy.load("xx_ent_wiki_sm")
-    multi_lingual_nlp.add_pipe(multi_lingual_nlp.create_pipe('sentencizer')) #Must add it in order to work
-    language_to_nlp_model["default"] = multi_lingual_nlp
 
     print("Done loading the models.")
 
