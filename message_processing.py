@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
+import re #Used in liwc_parsing
 from langdetect import detect, detect_langs, DetectorFactory
 import spacy
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+import liwc_parsing as liwc
 
 
 def clean_message_extract_emojis_mentions(message):
@@ -153,7 +155,7 @@ def create_language_to_nlp_model():
     Returns
     -------
     dict(String, spacy.lang.):
-        A dictionnary with the abrbreviation of the languages as key and the corresponding NLP model.
+        A dictionnary with the abbreviation of the languages as key and the corresponding NLP model.
     """
 
     print("Start loading the models.")
@@ -182,7 +184,7 @@ def sentiment_analysis(message, language):
     dict(String, Int):
         A dictionnary with the sentiment as key (neg, neu, pos and compound) and a value between 0 and 1 which is the intensity of that emotion.
     """
-    if language != "en":
+    if language != "en" or message == "":
         return None
     
     analyzer = SentimentIntensityAnalyzer()
@@ -190,22 +192,48 @@ def sentiment_analysis(message, language):
     
     return vs
 
-def categories_analysis(message, lexicon, language):
-    """Function that search the categories of words contained in the message and their occurence (normalised).
+
+def create_language_to_liwc_model(path_to_directory="liwc_dict/", extension="_liwc.txt"):
+    """Function that loads the different liwc model used to analyse the data in a dictionnary with the abbreviation of the language.
+    The recognised languages are English, German, French and Italian. The models are read from the directory liwc_dict.
+
+    Parameters
+    ----------
+    path_to_directory : relative path to directory where the models are stored. Default is liwc_dict/
+    extension: the extension name of the file after the language. Default is _liwc.txt
+
+    Returns
+    -------
+    dict(String, spacy.lang.):
+        A dictionnary with the abbreviation of the languages as key and the corresponding NLP model.
+    """
+    language_to_liwc_model = dict()
+
+    recognised_language = {"en", "fr", "de", "it"}
+
+    for language in recognised_language:
+        path_file = path_to_directory + language + extension
+        language_to_liwc_model[language] = liwc.get_liwc_groups(path_file)
+
+    return language_to_liwc_model
+
+
+def categories_analysis(message, liwc_model):
+    """Function that searches the occurence of the category in liwc.
+    For English, the categories are the 64 original LIWC categories + ADA (Applied data analysis course related term) as last one
+    For French, German and Italian, the categories are only those with pronouns and ADA, ie: [Ppron, You, We, They, I, Pron, HeShe, ADA]
 
     Parameters
     ----------
     message : The message cleaned.
-    lexicon: The empath lexicon with categories
-    language: The language of the message.
+    liwc_model: A tuple with the star_words, all_words and liwc_names of the liwc_model corresponding to the language of the message.
 
     Returns
     -------
-    dict(String, double):
-        A dictionnary with the categories as key and their normalised occurences as value. Only categories where the occurence is strictly positive are taken in account.
+    list(int):
+        A vector with the occurences of each categories of the corresponding liwc vector.
     """
-    if language != "en" or message == "":
+    if(liwc_model == None or message == ""):
         return None
-
-    categories_to_occurence = lexicon.analyze(message, normalize=True)
-    return {categorie: occurence for categorie, occurence in categories_to_occurence.items() if occurence>0}
+        
+    return liwc.get_liwc_features(message, *liwc_model)

@@ -1,0 +1,8 @@
+PronP: io tu egli ella esso essa noi voi essi esse me te sé lui lei loro mi ti ci vi suo suoi sua sue sé ciò lo gli moi mia miei mie tuo tuoi tua tue nostro nostra nostri nostre vostro vostra vostri vostre
+TuVoi: tu te ti tuoi tua tuoi tue voi vi vostro vostra vostri vostre
+Noi: noi ci nostro nostra nostri nostre
+EssiEsse: essi esse loro sé esse
+Io: io me mi mio mia miei mie
+Pron: io tu egli ella esso essa noi voi essi esse me te sé lui lei loro mi ti ci vi suo suoi sua sue sé ciò lo gli moi mia miei mie tuo tuoi tua tue nostro nostra nostri nostre vostro vostra vostri vostre quest* codest* quell* quegli quei qualcuno qualcheduno qualcosa qualche che uno alcuno alcunché tale taluno quale altro altrui chiunque chicchesia checche checché ciascuno ciascheduno cadauno ognuno tutto nessuno veruno niente nulla che cui chi
+EgliElla: egli ella lui esso lei essa sé ciò lo gli suo sua suoi sue
+ADA: deadline* scadenz* progett* esam* exam* homework* quiz* grad* classi lezione epfl code codificato semestr* git* grupp* team* squadr* credit* aula lab* tutorial* eserciz* finale

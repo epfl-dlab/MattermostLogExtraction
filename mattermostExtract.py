@@ -8,7 +8,6 @@ from datetime import datetime
 import hashlib
 import message_processing as mp
 import traceback
-from empath import Empath
 
 
 def anonymise_non_public_channel(channel_name, channel_type):
@@ -132,29 +131,29 @@ def process_data(raw_data, users_to_mail):
 
         data_first_traversal.append((hashed_sender, message, message_cleaned, no_words, emojis, mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension))  
 
-    #Detect the language of each channel and load the models
+    #Detect the language of each channel and load the models for spacy and liwc
     channel_to_language = mp.detect_channel_language(anonymised_channel_to_messages)
     language_to_nlp_model = mp.create_language_to_nlp_model()
+    language_to_liwc_model = mp.create_language_to_liwc_model()
 
     #yield the definitions of the columns as first row
-    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Tags", "NamedEntities", "Categories", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Tags", "NamedEntities", "LIWCCategories", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield definitions
-
-    lexicon = Empath()
 
     #Second traversal, we process the messages by getting the language and loading the corresponding nlp model
     for (hashed_sender, message, message_cleaned, no_words, emojis, mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension) in data_first_traversal:
         
         no_char = len(message_cleaned)
         hashed_mails_mentions = list(hashed_mails_from_mentions(mentions, users_to_mail, hash_receivers))
+        
         language = channel_to_language.get(anonymised_channel)
         nlp = language_to_nlp_model.get(language)
-
         pos_tagged, named_entities = mp.entity_processing(message_cleaned, nlp)
 
         sentiment_analysis = mp.sentiment_analysis(message, language)
 
-        categories = mp.categories_analysis(message_cleaned, lexicon, language)
+        liwc_model = language_to_liwc_model.get(language)
+        categories = mp.categories_analysis(message_cleaned, liwc_model)
 
         yield hashed_sender, message, message_cleaned, language, pos_tagged, named_entities, categories, sentiment_analysis, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
