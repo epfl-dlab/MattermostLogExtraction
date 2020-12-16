@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import psycopg2
 import sys
 from collections import OrderedDict
@@ -232,7 +231,7 @@ def main():
 
         print("Start processing the data.")
         data_processed = process_data(raw_data, users_to_hashed_mail)
-        write_csv(data=data_processed, filename='csv/test.csv')
+        write_csv(data=data_processed, filename='csv/mattermost_log_extraction_text.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))

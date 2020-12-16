@@ -5,4 +5,4 @@ SieP: sie ihnen
 Ich: ich mich mir mein meine meinen meinem meines meiner
 Pron: ich du er es sie wir uns ihr sie mein meine meinen meinem meines meiner dein deine deinen deinem deines deiner sein seinen seinem seines seiner ihre ihren ihrem ihres ihrer unser unsere unseren unserem unseres unserer euer euere euren eurem eurer eures mir dir ihm euch ihnen mich dich ihn sich selber selbst dessen deren denen derer diese dieser dieses diesen diesem wer was wen wem welche* wessen alle allen allem allesamt beide ein paar einige irgendwer jeder* jemand irgendjemand man niemand wenige
 ErEsSie: er ihn ihm sie ihr es sein seinen seinem seines seiner ihre ihren ihrem ihres ihrer
-ADA: deadline* frist* projekt* prüfung* exam* homework* aufgabe* hausaufgabe* quiz* note* grade* lektion* epfl code* semester git* gruppe* team* kredit* klasse* lab* tuto* übung* finale
+ADA: deadline* frist* projekt* prüfung* exam* homework* aufgabe* hausaufgabe* quiz* note* grade* lektion* epfl code* semester git* gruppe* team* kredit* klasse* lab* tuto* übung* finale slide*

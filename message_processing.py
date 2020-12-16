@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import re #Used in liwc_parsing
 from langdetect import detect, detect_langs, DetectorFactory
 import spacy
@@ -111,8 +110,7 @@ def detect_channel_language(anonymised_channel_to_messages):
         if(messages == None or messages==""):#Should never happen
             channel_to_language[anonymised_channel] = None
         else:
-            unicode_messages = messages.decode("utf-8")
-            language = detect(unicode_messages)
+            language = detect(messages)
             channel_to_language[anonymised_channel] = language
     
     return channel_to_language
@@ -135,16 +133,29 @@ def entity_processing(message, nlp):
     if(message == "" or nlp == None):
         return None, None
 
-    #Spacy need to work with unicode, not by default in python 2
-    unicode_message = message.decode("utf-8")
-
-    doc = nlp(unicode_message)
+    doc = nlp(message)
     
-    #pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8"), token.tag_.encode("utf-8"), idx) for idx, token in enumerate(doc)]
-    pos_tagged = [(token.text.encode("utf-8"), token.pos_.encode("utf-8"), token.tag_.encode("utf-8")) for token in doc]
-    named_entities = [(ent.text.encode("utf-8"), ent.label_.encode("utf-8")) for ent in doc.ents]
+    tokens = [token.text for token in doc]
+    pos_tagged = [(token.text, token.pos_, token.tag_) for token in doc]
+    named_entities = [(ent.text, ent.label_) for ent in doc.ents]
 
-    return pos_tagged, named_entities
+    index_and_entities = list()
+
+    for (text, label) in named_entities:
+        
+        entity_tokens = text.split(" ")
+        
+        indexes = ()
+        try:
+            for entity_token in entity_tokens:
+                indexes += (tokens.index(entity_token),)
+        except ValueError as err:
+            indexes = None
+
+        index_and_entities.append((indexes, text, label))
+
+
+    return pos_tagged, index_and_entities
 
 
 

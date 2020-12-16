@@ -5,4 +5,4 @@ IlsElles: ils elles leur leurs eux eux-mêmes elles-mêmes
 Je: je j' mon ma mes m'* me moi moi-même mien* mienne*
 Pron: je me m'* j'* moi tu te t’* toi nous vous il elle ils elles se lui soi leur eux celui celui-ci celui-là celle celle-ci celle-là ceux ceux-ci ceux-là celles celles-ci celles-là ce ceci cela ça mien tien sien mienne tienne sienne miens tiens siens miennes tiennes siennes nôtre* vôtre* qui que quoi dont où lequel auquel duquel laquelle lesquels auxquels desquels lesquelles auxquelles desquelles on tout uns unes aucun* certains certaine certaines tel telle tels telles tout toute tous toutes quelqu'un quelqu'une personne autrui quiconque
 IlElle: il elle son sa ses sien soi soi-même elle-même
-ADA: deadline* projet* exam* homework* quiz* note* grade* cours* leçon* epfl code semestre* git* groupe* team* équipe* crédit* classe* lab* tuto* exercice* final
+ADA: deadline* projet* exam* homework* quiz* note* grade* cours* leçon* epfl code semestre* git* groupe* team* équipe* crédit* classe* lab* tuto* exercice* final slide*
