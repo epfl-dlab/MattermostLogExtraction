@@ -100,17 +100,15 @@ def process_data(raw_data, users_to_mail):
 
     Returns
     -------
-    Generator((String, String, String, String, List(String, String, String), List((Tuple(int), String, String)), List(int), Dict(String, int), int, int, List(String), Set(String), String, char, List(String), Datetime, String, String, String))
+    Generator((String, String, List(String, String, String), List((Tuple(int), String, String)), List(int), Dict(String, int), int, int, List(String), Set(String), String, char, List(String), Datetime, String, String, String))
         A generator of tuples containing 
         - A String for the md5 hash of the mail of the sender
-        - A String for the message
-        - A String for the message cleaned
         - A String for the language
-        - A List((String, String, String)) for the tags (text, pos and tag).
-        - A List((Tuple(int), String, String)) for the entities (index(es) in the tag, text and label)
+        - A List((String, String)) for the tags (pos and tag).
+        - A List((Tuple(int), String)) for the entities (index(es) in the tag and label)
         - A List(int) for the vector of liwc categories (the occurence for each category)
         - A Dict(String, int) for the sentiment score with the definition of the sentiment and the corresponding value (between 0 and 1)
-        - An int for the number of words in the message (emojis and mentionned are not counted as words)
+        - An int for the number of words in the message (emojis and mentionned are not counted as words). Here, a word is some alpha or numerical char separeated with spaces and doesn't correspond to the number of tokens, which can be dervied from the tags
         - An int for the number of chars in the message after cleaning
         - A List(String) with every emojis in the message
         - A Set(String) with all the md5 hash of the mail of the people who were mentioned (@)
@@ -144,7 +142,7 @@ def process_data(raw_data, users_to_mail):
     language_to_liwc_model = mp.create_language_to_liwc_model()
 
     #yield the definitions of the columns as first row
-    definitions = ("Sender", "Message", "MessageCleaned", "Language", "Tags", "NamedEntities", "LIWCCategories", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
+    definitions = ("Sender", "Language", "Tags", "NamedEntities", "LIWCCategories", "SentimentScores", "NumberWords", "NumberChars","Emojis", "Mentions", "Channel", "ChannelType", "Receivers", "Time", "PostId", "PostParentId", "FileExtension")
     yield definitions
 
     #Second traversal, we process the messages by getting the language and loading the corresponding nlp model
@@ -162,7 +160,7 @@ def process_data(raw_data, users_to_mail):
         liwc_model = language_to_liwc_model.get(language)
         categories = mp.categories_analysis(message_cleaned, liwc_model)
 
-        yield hashed_sender, message, message_cleaned, language, pos_tagged, named_entities, categories, sentiment_analysis, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
+        yield hashed_sender, language, pos_tagged, named_entities, categories, sentiment_analysis, no_words, no_char, emojis, hashed_mails_mentions, anonymised_channel, channel_type, hash_receivers, date, post_id, post_parent_id, file_extension
 
 
 def query_message_from_to(cur):
@@ -239,7 +237,7 @@ def main():
 
         print("Start processing the data.")
         data_processed = process_data(raw_data, users_to_hashed_mail)
-        write_csv(data=data_processed, filename='csv/mattermost_log_extraction_text.csv')
+        write_csv(data=data_processed, filename='mattermost_log_extraction.csv')
 
     except(Exception, psycopg2.DatabaseError) as error:
         print("Error: " + str(error))

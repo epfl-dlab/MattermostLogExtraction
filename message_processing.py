@@ -137,7 +137,7 @@ def entity_processing(message, nlp):
     doc = nlp(message)
     
     tokens = [token.text for token in doc]
-    pos_tagged = [(token.text, token.pos_, token.tag_) for token in doc]
+    pos_tagged = [(token.pos_, token.tag_) for token in doc]
     named_entities = [(ent.text, ent.label_) for ent in doc.ents]
 
     index_and_entities = list()
@@ -153,7 +153,7 @@ def entity_processing(message, nlp):
         except ValueError as err:
             indexes = None
 
-        index_and_entities.append((indexes, text, label))
+        index_and_entities.append((indexes, label))
 
 
     return pos_tagged, index_and_entities
