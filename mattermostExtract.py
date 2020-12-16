@@ -80,13 +80,18 @@ def hashed_mails_from_mentions(mentions, users_to_hashed_mail, hashed_receivers)
 
 
 def process_data(raw_data, users_to_mail):
-    """Function that processes the raw_data to extract additional features or tranform some formats.
-    Transform the unix timestamp to a date.
+    """Generator function that processes the raw_data to extract additional features or tranform some formats.
+    -Transform the unix timestamp to a date.
+    -Anonymize the channel that are not public
     Clean all the messages by removing the emojis and the useless spaces and extracts the following features from the messages:
-    - The number of words in the message (mentions are counted as words, not emojis)
+    - The number of words in the message (mentions and emojis are not counted as words)
     - The number of chars in the message (after the message was cleaned)
     - A list of all the emojis in the message
-    - A set of all the mentions
+    - A set of all the people (anonymised with md5) mentionned 
+    - The language of the message (by associating a language to a whole channel instead of individually per message)
+    - The tag and the entities of the message
+    - A sentiment score for the message
+    - A vector with the occurences of liwc categories
 
     Parameters
     ----------
@@ -95,24 +100,27 @@ def process_data(raw_data, users_to_mail):
 
     Returns
     -------
-    Generator((string, string, String, String, (String, String) int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
+    Generator((String, String, String, String, List(String, String, String), List((Tuple(int), String, String)), List(int), Dict(String, int), int, int, List(String), Set(String), String, char, List(String), Datetime, String, String, String))
         A generator of tuples containing 
-        - A string for the md5 hash of the mail of the sender
-        - A string for the message
-        - A string for the message cleaned
+        - A String for the md5 hash of the mail of the sender
+        - A String for the message
+        - A String for the message cleaned
         - A String for the language
-        - A (String, String) tuple for the entities
-        - An int for the number of words in the message (emojis are not counted as words)
+        - A List((String, String, String)) for the tags (text, pos and tag).
+        - A List((Tuple(int), String, String)) for the entities (index(es) in the tag, text and label)
+        - A List(int) for the vector of liwc categories (the occurence for each category)
+        - A Dict(String, int) for the sentiment score with the definition of the sentiment and the corresponding value (between 0 and 1)
+        - An int for the number of words in the message (emojis and mentionned are not counted as words)
         - An int for the number of chars in the message after cleaning
-        - A list of string with every emojis in the message
-        - A set of strings with all the md5 hash of the mail of the people who were mentioned (@)
-        - A string for the name of the channel on which the message was sent
+        - A List(String) with every emojis in the message
+        - A Set(String) with all the md5 hash of the mail of the people who were mentioned (@)
+        - A String for the name of the channel on which the message was sent (anonymised for non public channel)
         - A char for the type of channel on wichh the message was sent (O for public, P for private or D for direct messages)
-        - A list of string for the md5 hash of the mail of the receivers (in the order in which they joined the channel)
+        - A List(String) for the md5 hash of the mail of the receivers (in the order in which they joined the channel)
         - A datetime at which the message was sent
-        - A string for the id of the post
-        - A string for the parent id of the post (if it a response to another post) or None if it not a response
-        - A string for the extension of the file if the message was sent with a document (picture for example) or None otherwise
+        - A String for the id of the post
+        - A String for the parent id of the post (if it a response to another post) or None if it not a response
+        - A String for the extension of the file if the message was sent with a document (picture for example) or None otherwise
     """
     anonymised_channel_to_messages = dict()
     data_first_traversal = list()
@@ -172,7 +180,7 @@ def query_message_from_to(cur):
 
     Returns
     -------
-    List((string, string, int, int, List<String>, Set<String>, string, char, list<string>, datetime, string, string, string))
+    List((String, String, int, int, List(String), Set(String), String, char, List(String), Datetime, String, String, String))
         A generator of tuples containing 
         - A string for the md5 hash of the mail of the sender
         - A string for the message

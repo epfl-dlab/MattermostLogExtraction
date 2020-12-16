@@ -89,7 +89,7 @@ def clean_message_extract_emojis_mentions(message):
 
 
 def detect_channel_language(anonymised_channel_to_messages):
-    """Function that detect the language of each channel (set to None if the message if empty).
+    """Function that detect the language of each channel (set to None if the message is empty).
 
     Parameters
     ----------
@@ -98,7 +98,7 @@ def detect_channel_language(anonymised_channel_to_messages):
     Returns
     -------
     dict(String, String):
-        A dictionnary with the anonymised channel as key and the abreviation (string of 2 chars) of the language.
+        A dictionnary with the anonymised channel as key and the abreviation (string of 2 chars) of the language as value.
     """
     #Set the seed such that the result is always the same
     DetectorFactory.seed = 0
@@ -117,7 +117,7 @@ def detect_channel_language(anonymised_channel_to_messages):
 
 
 def entity_processing(message, nlp):
-    """Function that retrieves the entities using the correspondong spacy model.
+    """Function that retrieves the tags and entities using the correspondong spacy model.
 
     Parameters
     ----------
@@ -126,9 +126,10 @@ def entity_processing(message, nlp):
 
     Returns
     -------
-    (list((String, String)), List(String, String):
+    (List((String, String)), List(tuple(int), String):
         - The tags of the messages
-        - The named entities of the message
+        - The named entities of the message with their corresponding index(es) in the tags (or None in some special case where it is badly split).
+          The indexes are there to retrieve to which tag the entity makes reference to, since we cannot have plain text due to anonymity.
     """
     if(message == "" or nlp == None):
         return None, None
@@ -206,7 +207,7 @@ def sentiment_analysis(message, language):
 
 def create_language_to_liwc_model(path_to_directory="liwc_dict/", extension="_liwc.txt"):
     """Function that loads the different liwc model used to analyse the data in a dictionnary with the abbreviation of the language.
-    The recognised languages are English, German, French and Italian. The models are read from the directory liwc_dict.
+    The recognised languages are English, German, French and Italian.
 
     Parameters
     ----------
@@ -215,8 +216,8 @@ def create_language_to_liwc_model(path_to_directory="liwc_dict/", extension="_li
 
     Returns
     -------
-    dict(String, spacy.lang.):
-        A dictionnary with the abbreviation of the languages as key and the corresponding NLP model.
+    dict(String, liwc_model):
+        A dictionnary with the abbreviation of the languages as key and the corresponding liwc model as value (see get_liwc_groups).
     """
     language_to_liwc_model = dict()
 
@@ -231,7 +232,7 @@ def create_language_to_liwc_model(path_to_directory="liwc_dict/", extension="_li
 
 def categories_analysis(message, liwc_model):
     """Function that searches the occurence of the category in liwc.
-    For English, the categories are the 64 original LIWC categories + ADA (Applied data analysis course related term) as last one
+    For English, the categories are the 64 original LIWC categories + ADA (Applied data analysis course related term) as last one.
     For French, German and Italian, the categories are only those with pronouns and ADA, ie: [Ppron, You, We, They, I, Pron, HeShe, ADA]
 
     Parameters

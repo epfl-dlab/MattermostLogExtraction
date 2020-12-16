@@ -15,7 +15,7 @@ def config(filename = "databaseSetup/database.ini", section="postgresql"):
 
     Returns
     -------
-    dictionnary(str, str)
+    Dictionnary(String, String)
         A dictionnary with the config informations found in the section of the file
     """
     parser = ConfigParser()
