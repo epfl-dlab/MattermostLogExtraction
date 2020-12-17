@@ -55,4 +55,4 @@ The script is in the file **mattermost_extract.py**. You can run it using:
 
 `python3 mattermost_extract.py`
 
-It will connect to the database (see [Database setup](#database setup), write queries to the database to extract NLP features, process them and store them in a csv file called 'mattermost_log_extraction.csv'. If you want to change the name of the csv file or give another path, you can modify line 240 of mattermost_extract.py and give another filename.
+It will connect to the database (see [Database setup](#database-setup)), write queries to the database to extract NLP features, process them and store them in a csv file called 'mattermost_log_extraction.csv'. If you want to change the name of the csv file or give another path, you can modify line 240 of mattermost_extract.py and give another filename.
