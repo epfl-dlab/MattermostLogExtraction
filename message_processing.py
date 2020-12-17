@@ -15,7 +15,7 @@ def clean_message_extract_emojis_mentions(message):
 
     Returns
     -------
-    (int, list(string), set(string), string):
+    (int, List(String), Set(String), String):
         - An int for the number of words (mentions and emojis are not counted)
         - A list with all the emojis
         - A set with all the mentions
