@@ -45,7 +45,7 @@ def query_message_from_to(cur):
 
     Returns
     -------
-    List((String, String, int, int, List(String), Set(String), String, char, List(String), Datetime, String, String, String))
+    List((String, String, String, char, List(String), int, String, String, String))
         A generator of tuples containing 
         - A String for the md5 hash of the mail of the sender
         - A String for the message
