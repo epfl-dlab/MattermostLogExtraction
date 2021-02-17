@@ -4,7 +4,6 @@ import spacy
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import liwc_parsing as liwc
 
-
 def clean_message_extract_emojis_mentions(message):
     """Function that goes through the message, clean it by removing useless spaces, emojis and mentions and extracts how many words 
     the message contains, all the mentions and all the emojis that are in the message
@@ -26,7 +25,6 @@ def clean_message_extract_emojis_mentions(message):
     emojis = []
     mentions = set()
 
-    already_space = True #To remove useless spaces in the sentence
     start_word = False
     start_emoji = False
     start_mention = False
@@ -37,53 +35,56 @@ def clean_message_extract_emojis_mentions(message):
 
     for ch in message:
 
-        if(ch.isspace()):
+        if(ch == '@' and not start_emoji and not start_word):
+            start_mention = True
+        elif(ch == ':' and not start_mention):
+            if(start_emoji):
+                start_emoji = False
+                emojis.append(emoji)
+                emoji=""
+            else:
+                start_emoji = True
+                if(start_word):
+                    start_word = False
+                    no_words += 1
+        elif(ch.isspace()):
             if(start_word):
                 start_word = False
                 no_words += 1
             if(start_mention):
                 start_mention = False
                 mentions.add(mention)
-                message_cleaned = message_cleaned[:-(len(mention)+2)] if (len(mention)+2<=len(message_cleaned) and message_cleaned[len(message_cleaned)- len(mention)-2].isspace()) else message_cleaned[:-(len(mention)+1)]
-                no_words-=1
-                mention = ""  
-            if(not already_space):
-                message_cleaned += ch
-                already_space=True
-            start_emoji = False
-        else:
-            message_cleaned += ch
-            already_space = False
-
-            if((ch.isalpha() or ch.isdigit()) and not start_emoji):
-                start_word = True
-            
-        if(start_emoji):
-            emoji += ch
-        if(start_mention):
-            mention += ch
-
-        if(ch == '@' and not start_emoji and not start_word):
-            start_mention = True
-        elif(ch == ':'):
-            if(start_emoji):
+                mention = ""
+            if(start_emoji): #It wasn't really an emoji, rather just a normal ':'
                 start_emoji = False
-                emojis.append(emoji[:-1])
-                message_cleaned = message_cleaned[:-(len(emoji)+3)] if (len(emoji)+3<=len(message_cleaned) and message_cleaned[len(message_cleaned)- len(emoji)-3].isspace()) else message_cleaned[:-(len(emoji)+2)]
-                emoji=""
-            else:
-                start_emoji = True
+                message_cleaned += ':'+ emoji
+                if(emoji != ""):
+                    no_words += 1
+                emoji = ""
 
-    #Count the last word and add it to the mention if it was one
+            message_cleaned += ch
+        else:
+            if(start_mention):
+                mention += ch
+            elif((start_emoji)):
+                emoji += ch
+            else:
+                if(ch.isalpha() or ch.isdigit()):
+                    start_word = True
+                message_cleaned += ch
+
+    #Count the last word and add the last mention to the mentions if it was one
     if(start_word):
         no_words += 1
     if(start_mention):
         mentions.add(mention)
-        message_cleaned = message_cleaned[:-(len(mention)+2)] if (len(mention)+2<=len(message_cleaned)) else message_cleaned[:-(len(mention)+1)]
-        no_words-=1
-    #Remove the last char if it is a space
-    if(message_cleaned[len(message_cleaned)-1].isspace()):
-        message_cleaned = message_cleaned[:-1]
+    if(start_emoji): #It wasn't really an emoji, rather just a normal ':'
+        message_cleaned += ':'+ emoji
+        if(emoji != ""):
+            no_words += 1
+
+    #Remove all useless spaces
+    message_cleaned = " ".join(message_cleaned.split())
     
     return no_words, emojis, mentions, message_cleaned
 
