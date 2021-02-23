@@ -1,4 +1,4 @@
-import re #Used in liwc_parsing
+import re
 from langdetect import detect, detect_langs, DetectorFactory
 import spacy
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
@@ -99,20 +99,27 @@ def detect_channel_language(anonymised_channel_to_messages):
     Returns
     -------
     dict(String, String):
-        A dictionnary with the anonymised channel as key and the abreviation (string of 2 chars) of the language as value.
+        A dictionnary with the anonymised channel as key and the abreviation (string of 2 chars) of the language as value or None if the channel didn't contain any chars.
     """
     #Set the seed such that the result is always the same
     DetectorFactory.seed = 0
 
     channel_to_language = dict()
 
-    for anonymised_channel, messages in  anonymised_channel_to_messages.items():
+    regex = re.compile('^(?=.*[a-zA-Z])', re.DOTALL)
 
-        if(messages == None or messages==""):#Should never happen
+    for anonymised_channel, messages in  anonymised_channel_to_messages.items():
+        
+        if(messages == None or not bool(regex.match(messages))): #Check that the channel contains at least one letter so that a language can be recongnised
             channel_to_language[anonymised_channel] = None
         else:
-            language = detect(messages)
-            channel_to_language[anonymised_channel] = language
+            try:
+                language = detect(messages)
+                channel_to_language[anonymised_channel] = language
+            except(Exception) as error: #Shouldn't happen
+                print("Error in language detection: " + str(error) + " The programm will continue with None as language for this channel.")
+                channel_to_language[anonymised_channel] = None
+
     
     return channel_to_language
 
